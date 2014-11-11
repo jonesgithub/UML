@@ -55,26 +55,27 @@ foreach (@all_file) {
 	open TEMP_FILE, ">$temp_file_name" or die "cannot open $temp_file_name\n";
 	
 	my %all_class;
-	my %methods;
+	my @methods;
 	my @private_vars;
 	my @public_vars;
 	my $class = "";
-	
+	my $has_params = 0;
 	while (<SOURCE_CODE>) {
 		if (/(public[ +]|)class( +)(.*)( +)[\{]?/) {
-			if (/[=!><'"\.]/) {
+			if (/[=!><\.]/) {
 				next;
 			}
 			if ($class ne "") {
-				my %h = ('methods'=>dclone(\%methods),'private_var'=>dclone(\@private_vars),'public_var'=>dclone(\@public_vars));
+				my %h = ('methods'=>dclone(\@methods),'private_var'=>dclone(\@private_vars),'public_var'=>dclone(\@public_vars));
 				$all_class{$class} = dclone(\%h);
 			}
 			$class = $3;
-			%methods = ();
+			@methods = ();
 			@private_vars = ();
 			@public_vars = ();
+			$has_params = 0;
 		} elsif (/(public( +)|private( +)){0,1}(static( +)){0,1}(\w+)( +)(\w+)( +)?\((.*)\)/) {
-			if (/[=!><'"\.]/) {
+			if (/[=!><\.]/) {
 				next;
 			}
 			my $type;
@@ -83,7 +84,25 @@ foreach (@all_file) {
 			}else {
 				$type = $1;
 			}
-			$methods{$8} = "$type->$10";
+			if ($8 eq $class) {
+				my %tmp  = ();
+				$tmp{name} = $8;
+				if ($10 ne "") {
+					$tmp{params} = "$type->$10, return nbsp";
+				}else {
+					$tmp{params} = "$type->$10 return nbsp";
+				}
+				push @methods, (dclone(\%tmp));
+			}else {
+				my %tmp  = ();
+				$tmp{name} = $8;
+				if ($10 ne "") {
+					$tmp{params} = "$type->$10, return $6";
+				}else {
+					$tmp{params} = "$type->$10 return $6";
+				}
+				push @methods, (dclone(\%tmp));
+			}
 		} elsif (/(public( +)|private( +)){1}(static( +)){0,1}(\w+)( +)(\w+)/) {
 			push @private_vars, "$6 ->$8" if $1 eq "private ";
 			push @public_vars, "$6 ->$8" if $1 eq "public ";
@@ -91,7 +110,7 @@ foreach (@all_file) {
 			push @public_vars, "$5 ->$3";
 		}
 	}
-	my %h = ('methods'=>dclone(\%methods),'private_var'=>dclone(\@private_vars),'public_var'=>dclone(\@public_vars));
+	my %h = ('methods'=>dclone(\@methods),'private_var'=>dclone(\@private_vars),'public_var'=>dclone(\@public_vars));
 	$all_class{$class} = dclone(\%h);
 	print TEMP_FILE to_json(\%all_class, {utf8 => 1, pretty => 1});
 	close TEMP_FILE;
@@ -100,4 +119,3 @@ foreach (@all_file) {
 	
 }
 print `php ./UML.php $all_temp_file`;
-system "rm $all_temp_file";
